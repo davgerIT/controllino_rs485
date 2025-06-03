@@ -1,0 +1,43 @@
+
+#include <ModbusRTUSlave.h>
+#include <SoftwareSerial.h>
+#include "DHT.h"
+
+#define DHTTYPE DHT11
+#define DHTPIN 7
+
+DHT dht(DHTPIN, DHTTYPE);
+
+#define MODBUS_CONFIG SERIAL_8N1
+#define controll_pin 2
+
+SoftwareSerial mb_serial = SoftwareSerial(1,0);
+
+ModbusRTUSlave modbus(mb_serial, controll_pin); //dePIN
+
+const uint8_t numHoldingRegisters = 2;
+int holdingRegisters[numHoldingRegisters];
+
+void setup() {
+
+  modbus.configureHoldingRegisters(holdingRegisters, numHoldingRegisters);
+
+  mb_serial.begin(19200);
+  modbus.begin(5, 19200, MODBUS_CONFIG);
+
+  pinMode(controll_pin, OUTPUT);
+
+  dht.begin();
+}
+
+void loop() {
+
+  digitalWrite(controll_pin, LOW);
+
+  holdingRegisters[0] = dht.readTemperature();
+  holdingRegisters[1] = dht.readHumidity();
+
+  modbus.poll();
+
+  digitalWrite(controll_pin, HIGH);
+}
