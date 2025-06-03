@@ -1,0 +1,81 @@
+#include <SPI.h>
+#include <Controllino.h>
+#include <Ethernet.h>
+#include <MQTT.h>
+#include <ArduinoModbus.h>
+
+byte mac[] = {  }; // Controllino MAC
+IPAddress ip(172,20,1,202); // Controllino IP címe
+IPAddress gw(172,20,1,254); // Controllino IP címe
+IPAddress dns(8,8,8,8); // Controllino IP címe
+IPAddress mask(255,255,255,0); // Controllino IP címe
+
+IPAddress mqttip(192,168,188,6); // Controllino IP címe
+
+EthernetClient net;
+MQTTClient client;
+
+float temperature;
+float humidity;
+
+void setup() {
+
+Serial.begin(9600); // serial start
+while (!Serial);
+
+Ethernet.begin(mac, ip, dns, gw, mask);
+client.begin(mqttip, net); // Broker ip - csatlakozás
+connect();
+
+if (!ModbusRTUClient.begin(19200)) { // modbus start
+Serial.println("Failed to start Modbus RTU Client!");
+while (1);
+}
+}
+
+void connect() { // internet connect
+  Serial.print("Csatlakozás az MQTT szerverhez...");
+  while (!client.connect("controllino-vz2", "ipinfo", "Password123")) { // azonosíto - user - pass
+    Serial.print(".");
+    delay(1000);
+  }
+  Serial.println("\nCsatlakozva!");
+  //client.subscribe("/controllino/tema"); // !! feliratkozás !!
+}
+
+void messageReceived(String &topic, String &payload) { // msg fogadás
+Serial.println("Bejövő üzenet: " + topic + " - " + payload);
+}
+
+void loop() {
+
+client.loop();
+if (!client.connected()) {
+connect();
+}
+
+if (!ModbusRTUClient.requestFrom(5, HOLDING_REGISTERS, 0x00, 2)) { // id - holding register olvasás - start - db
+Serial.print("failed to read registers! ");
+Serial.println(ModbusRTUClient.lastError());
+}
+else {
+short rawtemperature = ModbusRTUClient.read();
+short rawhumidity = ModbusRTUClient.read();
+
+temperature = rawtemperature;
+humidity = rawhumidity;
+Serial.println("Temp : " + (String) temperature);
+Serial.println("Hum : " + (String) humidity);
+}
+
+
+
+static unsigned long lastMillis = 0;
+if (millis() - lastMillis > 5000) { // 5mp-ként üzenet küldés
+lastMillis = millis();
+client.publish("controllino/tempx", (String) temperature);
+client.publish("controllino/humx", (String) humidity); // topic - msg
+}
+
+delay(2000);
+}
